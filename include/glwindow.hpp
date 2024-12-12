@@ -8,7 +8,8 @@
 #include <stdexcept>
 #include <vector>
 
-//#define GLWINDOW_SUPPORT_FRAMEBUFFER
+
+
 
 #ifndef GLWINDOW_WIN
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
@@ -28,6 +29,8 @@ extern int glwindow_version_major();
 extern int glwindow_version_minor();
 class glwindow; extern glwindow* glwindow_get();
 
+
+// ------------------ windows
 #ifdef GLWINDOW_WIN
 // windows includes...
 #include <Windows.h>
@@ -49,6 +52,36 @@ class glwindow; extern glwindow* glwindow_get();
 #define GLWINDOW_ARGS GetCommandLineA()
 
 #endif
+// ------------------ windows
+
+// ------------------ x11
+#ifdef GLWINDOW_X
+// X11 includes...
+#include<stdio.h>
+#include<stdlib.h>
+#include<X11/X.h>
+#include<X11/Xlib.h>
+#include<GL/gl.h>
+#include<GL/glx.h>
+
+// GL Function macros...
+#define GLFN_PROTOTYPE(prototype) PFN ## prototype ## PROC
+#define GLFN_DECLARE(prototype, name) GLFN_PROTOTYPE(prototype) name;
+#define GLFN_DEFINE(prototype, name) name = (GLFN_PROTOTYPE(prototype))glxGetProcAddress(#name);
+#define GLFN(prototype, name) GLFN_PROTOTYPE(prototype) name = (GLFN_PROTOTYPE(prototype))glxGetProcAddress(#name);
+
+// string typedef for windows...
+#define glwindow_str std::string
+
+// Windows specific...
+#define GLWINDOW_QUIT(value) PostQuitMessage(value);
+#define GLWINDOW_ARGS GetCommandLineA()
+
+#endif
+// ------------------ x11
+
+
+
 
 // Window creation macros...
 #define GLWINDOW_CLASS(major, minor, glwindow_derived) GLWINDOW_IMPL \
@@ -206,7 +239,97 @@ public:
     // mouse click handler...
     void click_begin(mouse_button button)
     {
-        timeStamp_ = std::chrono::steady_clock::now();
+        timeStampglwindow() {}
+    
+
+    glwindow(const glwindow_str& title)
+        : window_title_(title)
+    {
+    }
+
+    glwindow(const glwindow_str& title, int width, int height)
+        : window_title_(title), window_width_(width), window_height_(height)
+    {
+    }
+
+    glwindow(const glwindow_str& title, int width, int height, bool fullscreen)
+        :   window_title_(title), window_width_(width), window_height_(height), fullscreen_(fullscreen)
+    {
+    }
+
+    static const glwindow_str& title() { return glwindow_get()->window_title_; }
+    static bool fullscreen() { return glwindow_get()->fullscreen_; }
+    static int height() { return glwindow_get()->window_height_; }
+    static int width() { return glwindow_get()->window_width_; }
+    static int target_fps() { return glwindow_get()->target_fps_; }
+    static int click_duration() { return glwindow_get()->click_duration_; }
+  
+    static void title(const glwindow_str& title) { glwindow_get()->window_title_ = title; }
+    static void fullscreen(bool fs) { glwindow_get()->fullscreen_ = fs; }
+    static void height(int height) { glwindow_get()->window_height_ = height; }
+    static void width(int width) { glwindow_get()->window_width_ = width; }
+    static void target_fps(int fps) { glwindow_get()->target_fps_ = fps; }
+    static void click_duration(int duration) { glwindow_get()->click_duration_ = duration; }
+  
+    enum mouse_button
+    {
+        none = 0,
+        left,
+        middle,
+        right
+    };
+
+    typedef std::function<void()> idle_fn;
+    void idle(idle_fn fn) { idle_fn_ = fn; }
+    virtual void idle() { idle_fn_ ? idle_fn_() : (void)0; }
+
+    typedef std::function<void()> draw_fn;
+    void draw(draw_fn fn) { draw_fn_ = fn; }
+    virtual void draw() { draw_fn_ ? draw_fn_() : (void)0; }
+
+    typedef std::function<void()> kill_fn;
+    void kill(kill_fn fn) { kill_fn_ = fn; }
+    virtual void kill() { kill_fn_ ? kill_fn_() : (void)0; }
+
+    typedef std::function<void(int, int)> resize_fn;
+    void resize(resize_fn fn) { resize_fn_ = fn; }
+    virtual void resize(int width, int height) { resize_fn_ ? resize_fn_(width, height) : (void)0; }
+
+    typedef std::function<void(int, int)> mouse_move_fn;
+    void mouse_move(resize_fn fn) { mouse_move_fn_ = fn; }
+    virtual void mouse_move(int x, int y) { mouse_move_fn_ ? mouse_move_fn_(x, y) : (void)0; }
+
+    typedef std::function<void(int, int, mouse_button)> mouse_down_fn;
+    void mouse_down(mouse_down_fn fn) { mouse_down_fn_ = fn; }
+    virtual void mouse_down(int x, int y, mouse_button button) { mouse_down_fn_ ? mouse_down_fn_(x, y, button) : (void)0; }
+
+    typedef std::function<void(int, int, mouse_button)> mouse_up_fn;
+    void mouse_up(mouse_up_fn fn) { mouse_up_fn_ = fn; }
+    virtual void mouse_up(int x, int y, mouse_button button) { mouse_up_fn_ ? mouse_up_fn_(x, y, button) : (void)0; }
+
+    typedef std::function<void(int, int, mouse_button)> mouse_click_fn;
+    void mouse_click(mouse_click_fn fn) { mouse_click_fn_ = fn; }
+    virtual void mouse_click(int x, int y, mouse_button button) { mouse_click_fn_ ? mouse_click_fn_(x, y, button) : (void)0; }
+
+    typedef std::function<void(int, int, int)> mouse_scroll_fn;
+    void mouse_scroll(mouse_scroll_fn fn) { mouse_scroll_fn_ = fn; }
+    virtual void mouse_scroll(int x, int y, int value) { mouse_scroll_fn_ ? mouse_scroll_fn_(x, y, value) : (void)0; }
+
+    typedef std::function<void(int, int, unsigned int)> key_down_fn;
+    void key_down(key_down_fn fn) { key_down_fn_ = fn; }
+    virtual void key_down(int x, int y, unsigned int key) { key_down_fn_ ? key_down_fn_(x, y, key) : (void)0; }
+
+    typedef std::function<void(int, int, unsigned int)> key_up_fn;
+    void key_up(key_up_fn fn) { key_up_fn_ = fn; }
+    virtual void key_up(int x, int y, unsigned int key) { key_up_fn_ ? key_up_fn_(x, y, key) : (void)0; }
+
+    typedef std::function<void(std::vector<std::wstring>)> drag_drop_fn;
+    void drag_drop(drag_drop_fn fn) { drag_drop_fn_ = fn; }
+    virtual void drag_drop(std::vector<std::wstring> files) { drag_drop_fn_ ? drag_drop_fn_(files) : (void)0; }
+
+    class glcontext {};
+    void context(std::shared_ptr<glcontext> ctxt) 
+    { _ = std::chrono::steady_clock::now();
         mouse_button_ = button;
     }
     bool is_click(mouse_button button) const { return (button == mouse_button_ && std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeStamp_).count() < glwindow_get()->click_duration_); }
@@ -592,6 +715,8 @@ static void init_win(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 }
 
 #endif // GLWINDOW_WIN
+
+
 
 
 

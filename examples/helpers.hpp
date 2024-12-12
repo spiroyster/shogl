@@ -1,7 +1,7 @@
 #ifndef SHOGL_HELPERS_HPP
 #define SHOGL_HELPERS_HPP
 
-#include "..\include\glwindow.hpp"
+#include "../include/shogl.hpp"
 
 namespace shogl_helpers
 {

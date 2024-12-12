@@ -1,4 +1,4 @@
-#include "shogl.hpp"
+#include "../include/shogl.hpp"
 
 class myWindow : public shogl_window
 {

@@ -28,6 +28,7 @@ extern shogl_window* shogl();
 #endif
 #endif
 
+
 #ifdef SHOGL_X
 
 #include<stdio.h>
@@ -36,6 +37,11 @@ extern shogl_window* shogl();
 #include<X11/Xlib.h>
 #include<GL/gl.h>
 #include<GL/glx.h>
+
+#define GLFN_PROTOTYPE(prototype) PFN ## prototype ## PROC
+#define GLFN_DECLARE(prototype, name) GLFN_PROTOTYPE(prototype) name;
+#define GLFN_DEFINE(prototype, name) name = (GLFN_PROTOTYPE(prototype))glXGetProcAddress((const GLubyte *)#name);
+#define GLFN(prototype, name) GLFN_PROTOTYPE(prototype) name = (GLFN_PROTOTYPE(prototype))glXGetProcAddress((const GLubyte *)#name);
 
 #endif // SHOGL_X
 
@@ -230,7 +236,7 @@ public:
         cmap_ = XCreateColormap(dpy_, root_, vi_->visual, AllocNone);
         swa_.colormap = cmap_;
         swa_.event_mask = ExposureMask | KeyPressMask | KeyReleaseMask | PointerMotionMask | ButtonPress | ButtonReleaseMask;
-        win_ = XCreateWindow(dpy_, root_, 0, 0, shogl()->window_width(), shogl()->window_height(), 0, vi_->depth, InputOutput, vi_->visual, CWColormap | CWEventMask, &swa_);
+        win_ = XCreateWindow(dpy_, root_, 0, 0, 300, 300, 0, vi_->depth, InputOutput, vi_->visual, CWColormap | CWEventMask, &swa_);
         XMapWindow(dpy_, win_);
         //XStoreName(dpy_, win_, shogl()->window_title().c_str());
 

@@ -38,20 +38,40 @@ extern shogl_window* shogl();
 #include<GL/gl.h>
 #include<GL/glx.h>
 
+// GL Function macros...
 #define GLFN_PROTOTYPE(prototype) PFN ## prototype ## PROC
 #define GLFN_DECLARE(prototype, name) GLFN_PROTOTYPE(prototype) name;
 #define GLFN_DEFINE(prototype, name) name = (GLFN_PROTOTYPE(prototype))glXGetProcAddress((const GLubyte *)#name);
 #define GLFN(prototype, name) GLFN_PROTOTYPE(prototype) name = (GLFN_PROTOTYPE(prototype))glXGetProcAddress((const GLubyte *)#name);
 
+typedef std::string shogl_str;
+
 #endif // SHOGL_X
+
+
+#ifdef SHOGL_WIN
+
+#include <Windows.h>
+#include <gl/GL.h>
+#include "glext.h"
+#include "wglext.h"
+
+// GL Function macros...
+#define GLFN_PROTOTYPE(prototype) PFN ## prototype ## PROC
+#define GLFN_DECLARE(prototype, name) GLFN_PROTOTYPE(prototype) name;
+#define GLFN_DEFINE(prototype, name) name = (GLFN_PROTOTYPE(prototype))wglGetProcAddress(#name);
+#define GLFN(prototype, name) GLFN_PROTOTYPE(prototype) name = (GLFN_PROTOTYPE(prototype))wglGetProcAddress(#name);
+
+typedef std::string shogl_str;
+
+#endif
+
 
 // Macro...
 #define SHOGL(shogl_window_class) SHOGL_IMPL \
 namespace { static std::unique_ptr<shogl_window_class> instance_; } \
 shogl_window* shogl() { if (!instance_) { instance_ = std::make_unique<shogl_window_class>(); } return instance_.get(); } \
 void shogl_init_impl()
-
-typedef std::string shogl_str;
 
 // The windowing interface...
 class shogl_window
@@ -78,7 +98,7 @@ public:
         int major_;
         int minor_;
     public:
-        virtual void make_current() = 0;
+        virtual void make_current(void*) = 0;
         virtual void free() = 0;
 
         int major() const { return major_; }
@@ -241,12 +261,12 @@ public:
         //XStoreName(dpy_, win_, shogl()->window_title().c_str());
 
         glc_ = glXCreateContext(dpy_, vi_, NULL, GL_TRUE);
-        make_current();
+        make_current(nullptr);
 
         printf("OpenGL %s\n", glGetString(GL_VERSION));
     }
 
-    void make_current()
+    void make_current(void*)
     {
         glXMakeCurrent(dpy_, win_, glc_);
     }
@@ -400,5 +420,287 @@ static int run_x()
 } 
 
 #endif // SHOGL_X
+
+
+#ifdef SHOGL_WIN
+
+class win_context : public shogl_window::context
+{
+public:
+
+    HWND hWnd_;
+    HGLRC hGLrc_;
+    HINSTANCE hInst_;
+    WNDCLASSEX wcex_;
+
+    win_context(void* hdc)
+    {
+        if (!hdc)
+            throw std::runtime_error("No device context.");
+
+        HDC hDC = static_cast<HDC>(hdc);
+        if (!hDC)
+            throw std::runtime_error("Unable to get handle device context.");
+
+        // we then need to get a valid DC...
+        PIXELFORMATDESCRIPTOR pfd;
+        memset(&pfd, 0, sizeof(PIXELFORMATDESCRIPTOR));
+        pfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
+        pfd.nVersion = 1;
+        pfd.dwFlags = PFD_DOUBLEBUFFER | PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW;
+        pfd.iPixelType = PFD_TYPE_RGBA;
+        pfd.cColorBits = 32;
+        pfd.cDepthBits = 32;
+        pfd.cStencilBits = 8;
+        pfd.iLayerType = PFD_MAIN_PLANE;
+
+        int nPixelFormat = ChoosePixelFormat(hDC, &pfd);
+
+        if (nPixelFormat == 0)
+            throw std::runtime_error("Unable to choose pixel format.");
+
+        if (!SetPixelFormat(hDC, nPixelFormat, &pfd))
+            throw std::runtime_error("Unable to set pixel format.");
+
+        hGLrc_ = wglCreateContext(hDC);
+        wglMakeCurrent(hDC, hGLrc_);
+    }
+
+    //void free(void* hdc) { wglDeleteContext(hGLrc_); }
+    //void make_current(void* hdc) { wglMakeCurrent(static_cast<HDC>(hdc), hGLrc_); }
+
+    void make_current(void* hdc) { wglMakeCurrent(static_cast<HDC>(hdc), hGLrc_); }
+    void free() { wglDeleteContext(hGLrc_); }
+};
+
+static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    switch (message)
+    {
+    case WM_DESTROY:
+    {
+        //KillTimer(hWnd, IDT_FRAME_TIMER);
+        shogl()->kill();
+        PostQuitMessage(0);
+        break;
+    }
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_PAINT:
+    {
+        PAINTSTRUCT ps;
+        BeginPaint(hWnd, &ps);
+        shogl()->draw();
+        SwapBuffers(GetDC(hWnd));
+        EndPaint(hWnd, &ps);
+        break;
+    }
+    case WM_SIZE:
+    {
+        shogl()->resize(static_cast<int>(LOWORD(lParam)), static_cast<int>(HIWORD(lParam)));
+        shogl()->window_height(static_cast<int>(HIWORD(lParam)));
+        shogl()->window_width(static_cast<int>(LOWORD(lParam)));
+        break;
+    }
+    case WM_MOUSEWHEEL:
+    {
+        POINT pt; pt.x = LOWORD(lParam); pt.y = HIWORD(lParam); ScreenToClient(hWnd, &pt);
+        shogl()->mouse_scroll(pt.x, pt.y, GET_WHEEL_DELTA_WPARAM(wParam));
+        break;
+    }
+    case WM_MOUSEMOVE:
+    {
+        shogl()->mouse_move(LOWORD(lParam), HIWORD(lParam));
+        break;
+    }
+    case WM_LBUTTONDOWN:
+    {
+        //shogl()->click_begin(shogl_window::mouse_button::left);
+        shogl()->mouse_down(LOWORD(lParam), shogl()->window_height() - HIWORD(lParam), shogl_window::mouse_button::left);
+        SetCapture(hWnd);
+        break;
+    }
+    case WM_LBUTTONUP:
+    {
+        int x = LOWORD(lParam);
+        int y = HIWORD(lParam);
+        //if (shogl()->is_click(shogl_window::mouse_button::left))
+        //    shogl()->mouse_click(x, shogl()->window_height() - y, glwindow::mouse_button::left);
+        shogl()->mouse_up(x, shogl()->window_height() - y, shogl_window::mouse_button::left);
+        ReleaseCapture();
+        break;
+    }
+    case WM_MBUTTONDOWN:
+    {
+        //shogl()->click_begin(glwindow::mouse_button::middle);
+        shogl()->mouse_down(LOWORD(lParam), shogl()->window_height() - HIWORD(lParam), shogl_window::mouse_button::middle);
+        SetCapture(hWnd);
+        break;
+    }
+    case WM_MBUTTONUP:
+    {
+        int x = LOWORD(lParam);
+        int y = HIWORD(lParam);
+        //if (shogl()->is_click(glwindow::mouse_button::middle))
+        //    shogl()->mouse_click(x, glwindow_get()->height() - y, glwindow::mouse_button::middle);
+        shogl()->mouse_up(x, shogl()->window_height() - y, shogl_window::mouse_button::middle);
+        ReleaseCapture();
+        break;
+    }
+    case WM_RBUTTONDOWN:
+    {
+        //shogl()->click_begin(glwindow::mouse_button::right);
+        shogl()->mouse_down(LOWORD(lParam), shogl()->window_height() - HIWORD(lParam), shogl_window::mouse_button::right);
+        SetCapture(hWnd);
+        break;
+    }
+    case WM_RBUTTONUP:
+    {
+        int x = LOWORD(lParam);
+        int y = HIWORD(lParam);
+        //if (shogl()->is_click(glwindow::mouse_button::right))
+        //    shogl()->mouse_click(x, shogl()->window_height() - y, shogl_window::mouse_button::right);
+        shogl()->mouse_up(x, shogl()->window_height() - y, shogl_window::mouse_button::right);
+        ReleaseCapture();
+        break;
+    }
+    case WM_KEYDOWN:
+    {
+        int ll = LOWORD(lParam);
+        int hl = HIWORD(lParam);
+        int lw = LOWORD(wParam);
+        int hw = HIWORD(wParam);
+        POINT pt; GetCursorPos(&pt); ScreenToClient(hWnd, &pt);
+        shogl()->key_down(pt.x, shogl()->window_height() - pt.y, static_cast<unsigned int>(wParam));
+        break;
+    }
+    case WM_KEYUP:
+    {
+        POINT pt; GetCursorPos(&pt); ScreenToClient(hWnd, &pt);
+        shogl()->key_up(pt.x, shogl()->window_height() - pt.y, static_cast<unsigned int>(wParam));
+        break;
+    }
+    /*case WM_TIMER:
+    {
+        if (wParam == IDT_FRAME_TIMER)
+        {
+            InvalidateRect(hWnd, NULL, NULL);
+            UpdateWindow(hWnd);
+        }
+        break;
+    }*/
+    case WM_DROPFILES:
+    {
+        TCHAR szName[MAX_PATH];
+        HDROP hDrop = (HDROP)wParam;
+        int count = DragQueryFile(hDrop, 0xFFFFFFFF, szName, MAX_PATH);
+
+        std::vector<std::wstring> files;
+        for (int i = 0; i < count; i++)
+        {
+            DragQueryFile(hDrop, i, szName, MAX_PATH);
+            files.emplace_back(szName);
+        }
+        DragFinish(hDrop);
+        shogl()->drag_drop(files);
+        break;
+    }
+    default:
+        return DefWindowProc(hWnd, message, wParam, lParam);
+    }
+    return 0;
+}
+
+static void init_win(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+{
+    CoInitialize(nullptr);
+
+    wcex_.cbSize = sizeof(WNDCLASSEX);
+    wcex_.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
+    wcex_.lpfnWndProc = WndProc;
+    wcex_.cbClsExtra = 0;
+    wcex_.cbWndExtra = 0;
+    wcex_.hInstance = hInst_;
+    wcex_.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wcex_.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wcex_.lpszMenuName = NULL;
+    wcex_.lpszClassName = L"glwindow";
+
+    if (!RegisterClassEx(&wcex_))
+        throw std::runtime_error("Unable to register Window class");
+
+    hWnd_ = CreateWindowEx(WS_EX_OVERLAPPEDWINDOW | WS_EX_ACCEPTFILES, wcex_.lpszClassName, L"glwindow", WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, CW_USEDEFAULT, 320, 240, NULL, NULL, hInst_, NULL);
+
+    if (!hWnd_)
+        throw std::runtime_error(get_last_error_as_string());
+
+    hInst_ = hInstance;
+
+    // create the gl context...
+    auto context = glwindow_version_major() > 1 ?
+        std::make_shared<glcontext_base>(GetDC(hWnd_)) :
+        std::make_shared<glcontext_extended>(GetDC(hWnd_), glwindow_version_major(), glwindow_version_minor());
+
+    // trigger the instance to construct it (if GLWINDOW_CLASS)...
+    glwindow_get()->context(context);
+
+    // call the custom init (defined after GLWINDOW macro)...
+    glwindow_init_impl();
+
+    // set the callback frame timer...
+    if (glwindow_get()->target_fps())
+        SetTimer(hWnd_, IDT_FRAME_TIMER, (1000 / glwindow_get()->target_fps()), NULL);
+
+    // Resize the window to desired...
+    RECT rect;
+    GetWindowRect(hWnd_, &rect);
+    SetWindowPos(hWnd_, HWND_TOP, rect.left, rect.top, glwindow_get()->width(), glwindow_get()->height(), NULL);
+
+    // Set the name of the window...
+    SetWindowText(hWnd_, glwindow_get()->title().c_str());
+}
+
+static int run_win()
+{
+    try
+    {
+        init_win(hInstance, hPrevInstance, lpCmdLine, nCmdShow);
+        MSG msg; 
+        ShowWindow(hWnd_, nCmdShow);
+        UpdateWindow(hWnd_);
+        while (GetMessage(&msg, NULL, 0, 0))
+        {
+            glwindow_get()->idle();
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+            return (int)msg.wParam;
+    }
+    catch (const std::exception& e) { MessageBox(NULL, ansi_to_wide(e.what()).c_str(), L"GLwindow", MB_ICONERROR); }
+    catch (...) { MessageBox(NULL, L"Unknown error", L"GLwindow", MB_ICONERROR); }
+    return 0;
+}
+
+// For this to work, we first need to create the context since GL functions maybe members of shogl_window so valid 
+// context will need to exist before resolving them via shogl_window instantiation...
+//#define SHOGL_IMPL int main(int argc, char **argv) \
+//{ \
+//    std::shared_ptr<x_context> ctx = std::make_shared<x_context>(); \
+//    shogl_init_impl(); \
+//    shogl()->window_context(ctx); \
+//    return run_x(); \
+//} 
+
+#define SHOGL_IMPL int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) \
+{\
+    CoInitialize(nullptr); \
+    std::shared_ptr<win_context> ctx = std::make_shared<win_context>(); \
+    shogl_init_impl(); \
+    shogl()->window_context(ctx); \
+    return run_win(); \   
+}
+
+#endif // SHOGL_WIN
 
 #endif // SHOGL_HPP

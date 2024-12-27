@@ -1,11 +1,12 @@
-#include <glwindow.hpp>
 
+#include "../include/shogl.hpp"
 #include "helpers.hpp"
 
-class myglwindow : public glwindow
+class myWindow : public shogl_window
 {
     GLuint vao_;
     GLuint program_;
+    unsigned int pointBuffer_, colourBuffer_;
 
     // Rotation angle...
     float angle_ = 0;
@@ -24,28 +25,30 @@ class myglwindow : public glwindow
     GLFN(GLBINDVERTEXARRAY, glBindVertexArray)
     GLFN(GLGETUNIFORMLOCATION, glGetUniformLocation)
     GLFN(GLUNIFORMMATRIX4FV, glUniformMatrix4fv)
+    GLFN(GLDELETEPROGRAM, glDeleteProgram)
+    GLFN(GLDELETEVERTEXARRAYS, glDeleteVertexArrays)
+    GLFN(GLDELETEBUFFERS, glDeleteBuffers)
 
 public:
-    myglwindow()
-        : glwindow(L"OpenGL 4.3", 800, 600, false)
+    myWindow()
     {
         // Create our geometry...
         std::vector<float> points = { -0.5f, -0.5f, 0.0f, 0.0f, 0.5f, 0.0f, 0.5f, -0.5f, 0.0f };
         std::vector<float> colours = { 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f };
-        unsigned int pointBuffer, colourBuffer;
+        
 
         glGenVertexArrays(1, &vao_);
         glBindVertexArray(vao_);
 
-        glGenBuffers(1, &pointBuffer);
-        glBindBuffer(GL_ARRAY_BUFFER, pointBuffer);
+        glGenBuffers(1, &pointBuffer_);
+        glBindBuffer(GL_ARRAY_BUFFER, pointBuffer_);
         glBufferData(GL_ARRAY_BUFFER, sizeof(float) * points.size(), &points.front(), GL_STATIC_DRAW);
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
         glBindBuffer(GL_ARRAY_BUFFER, NULL);
 
-        glGenBuffers(1, &colourBuffer);
-        glBindBuffer(GL_ARRAY_BUFFER, colourBuffer);
+        glGenBuffers(1, &colourBuffer_);
+        glBindBuffer(GL_ARRAY_BUFFER, colourBuffer_);
         glBufferData(GL_ARRAY_BUFFER, sizeof(float) * colours.size(), &colours.front(), GL_STATIC_DRAW);
         glEnableVertexAttribArray(1);
         glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0);
@@ -86,6 +89,14 @@ public:
 
     void draw()
     {
+        angle_ += 0.1f;
+        rotationMatrix_[0] = cos(angle_);
+        rotationMatrix_[1] = sin(angle_);
+        rotationMatrix_[4] = -sin(angle_);
+        rotationMatrix_[5] = cos(angle_);
+        rotationMatrix_[10] = 1.0f;
+        rotationMatrix_[15] = 1.0f;
+
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -99,35 +110,23 @@ public:
         glUseProgram(NULL);
     }
 
-    void idle()
+    void resize(int w, int h)
     {
-        // Check the frame limiter, only increment angle if frame time has passed...
-        if (glwindow_get()->frame_limiter())
-        {
-            angle_ += 0.2f;
-            glMatrixMode(GL_MODELVIEW);
-            glLoadIdentity();
-            glRotatef(angle_, 0, 0, 1.0f);
-            glGetFloatv(GL_MODELVIEW_MATRIX, rotationMatrix_);
-        }
+        glViewport(0, 0, w, h);
     }
 
-    void resize(int width, int height)
+    void kill()
     {
-        glViewport(0, 0, width, height);
-    }
-
-    void mouse_down(int x, int y, mouse_button button)
-    {
-        if (button == mouse_button::left)
-            GLWINDOW_QUIT(1)
+        glDeleteBuffers(1, &pointBuffer_);
+        glDeleteBuffers(1, &colourBuffer_);
+        glDeleteVertexArrays(1, &vao_);
+        glDeleteProgram(program_);
     }
 };
 
-GLWINDOW_CLASS(4, 3, myglwindow)
+SHOGL_CLASS(myWindow)
 {
-    // This is called after context and window creation...
-    /*myglwindow::width(1200);
-    myglwindow::height(800);
-    myglwindow::title(L"OpenGL 4.3 myWindow");*/
+    shogl()->window_title("Hello triangle GL4");
+    shogl()->window_size(600, 600);
+    shogl()->window_fps(60);
 }

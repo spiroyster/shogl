@@ -1,8 +1,10 @@
-#include "../include/shogl.hpp"
+#define SHOGL_OPENGL_10             // Force GL1.0 context.
+#include "../include/shogl.hpp"     // Include shogl...
 
 class myWindow : public shogl_window
 {
-    float angle = 0.0f;
+    float angle_ = 0.0f;
+
 public:
 
     void draw()
@@ -12,7 +14,7 @@ public:
 
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
-        glRotatef(angle, 0, 0, 1.0f);
+        glRotatef(angle_, 0, 0, 1.0f);
 
         glBegin(GL_TRIANGLES);
         glColor3f(1.0f, 0, 0);
@@ -24,18 +26,22 @@ public:
         glEnd();
     }
 
+    void idle()
+    {
+        angle_ += 0.1f;
+    }
+
     void resize(int w, int h)
     {
         glViewport(0, 0, w, h);
     }
 
-    void idle()
-    {
-        angle += 0.1f;
-    }
+
+
 };
 
-SHOGL(myWindow) 
+SHOGL_CLASS(myWindow)
 {
-    shogl()->window_title("Hello triangle");
+    shogl()->window_title("Hello triangle (class) GL1");
+    shogl()->window_fps(60);
 }

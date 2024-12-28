@@ -42,7 +42,7 @@ extern shogl_window* shogl();
 #define GLFN_DEFINE(prototype, name) name = (GLFN_PROTOTYPE(prototype))glXGetProcAddress((const GLubyte *)#name);
 #define GLFN(prototype, name) GLFN_PROTOTYPE(prototype) name = (GLFN_PROTOTYPE(prototype))glXGetProcAddress((const GLubyte *)#name);
 
-#define SHOGL_QUIT(value) PostQuitMessage(value);
+//#define SHOGL_QUIT(value) PostQuitMessage(value);
 #define SHOGL_CONTEXT dynamic_cast<x_context*>(shogl()->window_context());
 
 #endif // SHOGL_X
@@ -134,6 +134,7 @@ class shogl_window
     int window_width_ = 300;
     int window_height_ = 300;
     bool fullscreen_ = false;
+    int quit_ = -1;
     int fps_ = 0;
     std::vector<std::string> args_;
     
@@ -162,7 +163,7 @@ public:
         virtual void window_title(const std::string& title) = 0;
         virtual void window_size(int width, int height) = 0;
         virtual void window_redraw() = 0;
-        
+        virtual void window_quit(int exit_code) = 0;
     };
 
     typedef std::function<void()> idle_fn;
@@ -276,6 +277,13 @@ public:
         return false;
     }
 
+    void window_quit(int exit_code) 
+    { 
+        quit_ = exit_code; 
+        if (context_)
+            context_->window_quit(exit_code);
+    }
+    bool window_quit() const { return quit_ >= 0; }
 };
 
 
@@ -312,8 +320,7 @@ public:
         swa_.event_mask = ExposureMask | KeyPressMask | KeyReleaseMask | PointerMotionMask | ButtonPress | ButtonReleaseMask;
         win_ = XCreateWindow(dpy_, root_, 0, 0, 300, 300, 0, vi_->depth, InputOutput, vi_->visual, CWColormap | CWEventMask, &swa_);
         XMapWindow(dpy_, win_);
-        //XStoreName(dpy_, win_, shogl()->window_title().c_str());
-
+        
         glc_ = glXCreateContext(dpy_, vi_, NULL, GL_TRUE);
         make_current(nullptr);
 
@@ -330,9 +337,23 @@ public:
         glXMakeCurrent(dpy_, None, NULL);
         glXDestroyContext(dpy_, glc_);
     }
+
+    void window_title(const std::string& title)
+    {
+        XStoreName(dpy_, win_, title.c_str());
+    }
+        
+    void window_size(int width, int height)
+    {
+        XResizeWindow(dpy_, win_, width, height);
+    }
+        
+    void window_redraw() {}
+
+    void window_quit(int exit_code) {}
 };
 
-static void process_event(XEvent& event, bool& quit)
+static void process_event(XEvent& event)
 {
     switch (event.type)
     {
@@ -410,10 +431,6 @@ static void process_event(XEvent& event, bool& quit)
     case KeyPress:
         {
             shogl()->key_down(event.xbutton.x, event.xbutton.y, event.xkey.keycode);
-            
-            // IF escaped pressed, quit...
-            if ( event.xkey.keycode == 0x09 )
-                quit = true;
         }
         break;
     case KeyRelease:
@@ -430,30 +447,54 @@ static int run_x()
 {
     auto ctx = dynamic_cast<x_context*>(shogl()->window_context());
     XStoreName(ctx->dpy_, ctx->win_, shogl()->window_title().c_str());
-    bool quit = false;
-    while (!quit)
+    if (shogl()->window_fps())
     {
-        // Check resize...
-        XGetWindowAttributes(ctx->dpy_, ctx->win_, &ctx->gwa_);
-        if (shogl()->window_width() != ctx->gwa_.width || shogl()->window_height() != ctx->gwa_.height)
+        while (!shogl()->window_quit())
         {
-            shogl()->resize(ctx->gwa_.width, ctx->gwa_.height);
-            shogl()->assign_window_size(ctx->gwa_.width, ctx->gwa_.height);
-        }
+            // Check resize...
+            XGetWindowAttributes(ctx->dpy_, ctx->win_, &ctx->gwa_);
+            if (shogl()->window_width() != ctx->gwa_.width || shogl()->window_height() != ctx->gwa_.height)
+            {
+                shogl()->resize(ctx->gwa_.width, ctx->gwa_.height);
+                shogl()->assign_window_size(ctx->gwa_.width, ctx->gwa_.height);
+            }
 
-        // Process event(s) if any...
-        if(XCheckWindowEvent(ctx->dpy_, ctx->win_, KeyPressMask | KeyReleaseMask | PointerMotionMask | ButtonPressMask | ButtonReleaseMask, &ctx->xev_))
-            process_event(ctx->xev_, quit);
-        
-        // Draw if time for frame...
-        if (shogl()->frame_limiter())
+            // Process event(s) if any...
+            if(XCheckWindowEvent(ctx->dpy_, ctx->win_, KeyPressMask | KeyReleaseMask | PointerMotionMask | ButtonPressMask | ButtonReleaseMask, &ctx->xev_))
+                process_event(ctx->xev_);
+            
+            // Draw if time for frame...
+            if (shogl()->frame_limiter())
+            {
+                shogl()->draw();
+                glXSwapBuffers(ctx->dpy_, ctx->win_);
+            }
+
+            // Idling...
+            shogl()->idle();
+        }
+    }
+    else
+    {
+        while (!shogl()->window_quit())
         {
+            XNextEvent(ctx->dpy_, &ctx->xev_);
+            XGetWindowAttributes(ctx->dpy_, ctx->win_, &ctx->gwa_);
+            if (shogl()->window_width() != ctx->gwa_.width || shogl()->window_height() != ctx->gwa_.height)
+            {
+                shogl()->resize(ctx->gwa_.width, ctx->gwa_.height);
+                shogl()->assign_window_size(ctx->gwa_.width, ctx->gwa_.height);
+            }
+
+            // Process event(s) if any...
+            process_event(ctx->xev_);
+            
             shogl()->draw();
             glXSwapBuffers(ctx->dpy_, ctx->win_);
+            
+            // Idling...
+            shogl()->idle();
         }
-
-        // Idling...
-        shogl()->idle();
     }
     shogl()->kill();
     ctx->free();
@@ -512,7 +553,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     {
     case WM_DESTROY:
     {
-        SHOGL_QUIT(0);
+        shogl()->window_quit(0);
         return 0;
     }
     case WM_ERASEBKGND:
@@ -744,6 +785,10 @@ public:
         GetWindowRect(hWnd_, &rect);
         SetWindowPos(hWnd_, HWND_TOP, rect.left, rect.top, width, height, NULL);
     }
+    void window_quit(int exit_code) 
+    {
+        PostQuitMessage(exit_code);
+    }
 };
 
 static int run_win(int nCmdShow)
@@ -765,13 +810,12 @@ static int run_win(int nCmdShow)
 
         if (shogl()->window_fps())
         {
-            bool quit = false;
-            while (!quit)
+            while (!shogl()->window_quit())
             {
                 if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
                 {
                     if (msg.message == WM_QUIT)
-                        quit = true;
+                        shogl()->window_quit();
 
                     TranslateMessage(&msg);
                     DispatchMessage(&msg);

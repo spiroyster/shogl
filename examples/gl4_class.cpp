@@ -2,6 +2,8 @@
 #include "../include/shogl.hpp"
 #include "helpers.hpp"
 
+#include <math.h>
+
 class myWindow : public shogl_window
 {
     GLuint vao_;
@@ -122,11 +124,17 @@ public:
         glDeleteVertexArrays(1, &vao_);
         glDeleteProgram(program_);
     }
+
+    void key_down(int x, int y, unsigned int key)
+    {
+        shogl()->window_quit(0);
+        printf("quitting...");
+    }
 };
 
 SHOGL_CLASS(myWindow)
 {
     shogl()->window_title("Hello triangle GL4");
     shogl()->window_size(600, 600);
-    shogl()->window_fps(60);
+    //shogl()->window_fps(60);
 }

@@ -36,6 +36,10 @@ public:
         glViewport(0, 0, w, h);
     }
 
+    void key_down(int x, int y, unsigned int key)
+    {
+        shogl()->window_quit(0);
+    }
 
 
 };

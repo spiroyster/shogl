@@ -1,6 +1,7 @@
 
 #include "../include/shogl.hpp"
 #include "helpers.hpp"
+#include <math.h>
 
 // Rotation angle...
 float angle_ = 0;

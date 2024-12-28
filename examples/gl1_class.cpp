@@ -14,7 +14,7 @@ public:
 
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
-        glRotatef(angle_, 0, 0, 1.0f);
+        glRotatef(angle_ += 0.1f, 0, 0, 1.0f);
 
         glBegin(GL_TRIANGLES);
         glColor3f(1.0f, 0, 0);
@@ -28,7 +28,7 @@ public:
 
     void idle()
     {
-        angle_ += 0.1f;
+        //angle_ += 0.1f;
     }
 
     void resize(int w, int h)

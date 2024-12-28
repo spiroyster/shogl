@@ -21,7 +21,7 @@ Designed to be quick and easy to use and still versatile only requiring C++14 an
 
 # Usage
 
-Simply include single header file _shogl.hpp_. shogl only requires C++14 std and uses _wglext.h_ (windows) and _glx.hpp_ (X.org) which should be in the same folder as _shogl.hpp_ and are provided.
+Simply include single header file _shogl.hpp_. shogl only requires C++14 std and uses _wglext.h_ (windows) and _glx.hpp_ (X11) which should be in the same folder as _shogl.hpp_ and are provided.
 
 shogl works by instatiating a platform/version dependant context _shogl_window::context_ and then providing an interface _shogl_window_ that can be used in two different ways. Either an OO paradim can be used by optionally deriving from _shogl_window_ class a custom class and overriding the required methods, or a more functional paradim which setting a callback for the required method.  
 
@@ -91,6 +91,7 @@ Other than events, the interface provides accessors and mutators for various win
 | _window_fps(int)_ | Set the framerate of the window callback |
 | _window_fullscreen(bool)_ | toggle fullscreen |
 | _redraw()_ | Manually redraw the window |
+| _window_quit(int exit_code)_ | Manually quit the window. This will start termination process and ultimately call _kill()_. |
 
 ### Idle/Draw
 
@@ -140,7 +141,7 @@ Window resizing can be manually done at any time, likewise the title can be set 
 
 ### Quitting
 
-shogl applications should use the macro __SHOGL_QUIT(exitCode)__ to elegantly exit the shogl application. This will ultimately call _kill()_ which should cleanup any gl resources used, which will be called before the context is destroyed.
+shogl applications can be manually quit by calling _window_quit()_ passing the desired exit code to elegantly exit the shogl application. This will ultimately call _kill()_ which should cleanup any gl resources used, which will be called before the context is destroyed.
 
 ### Context
 
@@ -160,6 +161,8 @@ For OpenGL 4.6 context...
 
 etc...
 
+> X11 uses compatibility profiles and so specific version macro not required.
+
 To aid in using extended gl functions which are not defined by default in gl.h either an extension library can be used (such as GLEW/GLFW), or alternatively shogl inbuilt macros can retrieve (context version valid ofcourse) the function by using the __GLFN(...)__ macro...
 
 e.g.
@@ -177,6 +180,7 @@ then to assign/define the function...
     GLFN_DEFINE(GLUSEPROGRAM, glUseProgram)
 
 > N.B It is down to the user/client to check if these functions are valid (will be NULL is invalid context version, or no valid context).
+
 
 
 

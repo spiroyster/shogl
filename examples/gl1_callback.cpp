@@ -37,4 +37,9 @@ SHOGL()
             glViewport(0, 0, width, height);
         });
 
+    shogl()->key_down([](int x, int y, unsigned int key)
+        {
+            shogl()->window_quit(0);
+        });
+
 }

@@ -92,10 +92,10 @@ public:
     void draw()
     {
         angle_ += 0.1f;
-        rotationMatrix_[0] = cos(angle_);
-        rotationMatrix_[1] = sin(angle_);
-        rotationMatrix_[4] = -sin(angle_);
-        rotationMatrix_[5] = cos(angle_);
+        rotationMatrix_[0] = static_cast<float>(cos(angle_));
+        rotationMatrix_[1] = static_cast<float>(sin(angle_));
+        rotationMatrix_[4] = static_cast<float>(-sin(angle_));
+        rotationMatrix_[5] = static_cast<float>(cos(angle_));
         rotationMatrix_[10] = 1.0f;
         rotationMatrix_[15] = 1.0f;
 

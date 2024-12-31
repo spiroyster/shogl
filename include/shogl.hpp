@@ -10,7 +10,7 @@
 
 // Forward declarations...
 void shogl_init_impl();
-class shogl_window; 
+class shogl_window;
 extern shogl_window* shogl();
 
 // Platform macros...
@@ -51,6 +51,7 @@ extern shogl_window* shogl();
 #ifdef SHOGL_WIN
 
 #pragma comment(lib, "opengl32.lib")
+#pragma comment(linker, "/SUBSYSTEM:WINDOWS")
 
 #include <Windows.h>
 #include <gl/GL.h>
@@ -137,9 +138,9 @@ class shogl_window
     int quit_ = -1;
     int fps_ = 0;
     std::vector<std::string> args_;
-    
+
 public:
-    
+
     enum mouse_button
     {
         none = 0,
@@ -148,7 +149,7 @@ public:
         right
     };
 
-    class context 
+    class context
     {
     protected:
         int major_;
@@ -177,7 +178,7 @@ public:
     typedef std::function<void(int, int, unsigned int)> key_up_fn;
     typedef std::function<void(int, int, unsigned int)> key_down_fn;
     typedef std::function<void(std::vector<std::wstring>)> drag_drop_fn;
-    
+
 private:
     idle_fn idle_fn_ = nullptr;
     draw_fn draw_fn_ = nullptr;
@@ -192,39 +193,43 @@ private:
     drag_drop_fn drag_drop_fn_ = nullptr;
     std::shared_ptr<context> context_;
     std::chrono::steady_clock::time_point fps_time_stamp_ = std::chrono::steady_clock::now();
-    
+
 public:
     shogl_window() {}
-    
+
+    shogl_window(const std::string& title, int width, int height)
+        : window_title_(title), window_width_(width), window_height_(height)
+    {}
+
     // Events...
 
     void idle(idle_fn fn) { idle_fn_ = fn; }
     virtual void idle() { idle_fn_ ? idle_fn_() : (void)0; }
-    
+
     void draw(draw_fn fn) { draw_fn_ = fn; }
     virtual void draw() { draw_fn_ ? draw_fn_() : (void)0; }
-    
+
     void kill(kill_fn fn) { kill_fn_ = fn; }
     virtual void kill() { kill_fn_ ? kill_fn_() : (void)0; }
-    
+
     void resize(resize_fn fn) { resize_fn_ = fn; }
     virtual void resize(int width, int height) { resize_fn_ ? resize_fn_(width, height) : (void)0; }
-    
+
     void mouse_move(resize_fn fn) { mouse_move_fn_ = fn; }
     virtual void mouse_move(int x, int y) { mouse_move_fn_ ? mouse_move_fn_(x, y) : (void)0; }
-    
+
     void mouse_down(mouse_down_fn fn) { mouse_down_fn_ = fn; }
     virtual void mouse_down(int x, int y, mouse_button button) { mouse_down_fn_ ? mouse_down_fn_(x, y, button) : (void)0; }
-    
+
     void mouse_up(mouse_up_fn fn) { mouse_up_fn_ = fn; }
     virtual void mouse_up(int x, int y, mouse_button button) { mouse_up_fn_ ? mouse_up_fn_(x, y, button) : (void)0; }
-    
+
     void mouse_scroll(mouse_scroll_fn fn) { mouse_scroll_fn_ = fn; }
     virtual void mouse_scroll(int x, int y, int value) { mouse_scroll_fn_ ? mouse_scroll_fn_(x, y, value) : (void)0; }
-    
+
     void key_down(key_down_fn fn) { key_down_fn_ = fn; }
     virtual void key_down(int x, int y, unsigned int key) { key_down_fn_ ? key_down_fn_(x, y, key) : (void)0; }
-    
+
     void key_up(key_up_fn fn) { key_up_fn_ = fn; }
     virtual void key_up(int x, int y, unsigned int key) { key_up_fn_ ? key_up_fn_(x, y, key) : (void)0; }
 
@@ -232,10 +237,10 @@ public:
     virtual void drag_drop(std::vector<std::wstring> files) { drag_drop_fn_ ? drag_drop_fn_(files) : (void)0; }
 
     // Attributes (these can be set at any time)...
-    
+
     const std::string& window_title() const { return window_title_; }
-    void window_title(const std::string& title) 
-    { 
+    void window_title(const std::string& title)
+    {
         window_title_ = title;
         if (context_)
             context_->window_title(title);
@@ -243,10 +248,10 @@ public:
 
     bool window_fullscreen() const { return fullscreen_; }
     void window_fullscreen(bool fs) { fullscreen_ = fs; }
-    
+
     int window_height() const { return window_height_; }
     int window_width() const { return window_width_; }
-    
+
     void window_size(int width, int height)
     {
         if (context_)
@@ -277,9 +282,9 @@ public:
         return false;
     }
 
-    void window_quit(int exit_code) 
-    { 
-        quit_ = exit_code; 
+    void window_quit(int exit_code)
+    {
+        quit_ = exit_code;
         if (context_)
             context_->window_quit(exit_code);
     }
@@ -294,9 +299,9 @@ class x_context : public shogl_window::context
 public:
 
     GLXContext              glc_;
-    Display*                dpy_;
+    Display* dpy_;
     Window                  root_;
-    XVisualInfo*            vi_;
+    XVisualInfo* vi_;
     Colormap                cmap_;
     XSetWindowAttributes    swa_;
     Window                  win_;
@@ -306,21 +311,21 @@ public:
     x_context()
     {
         dpy_ = XOpenDisplay(NULL);
-        if(!dpy_) 
+        if (!dpy_)
             throw std::runtime_error("cannot connect to X server");
-        
+
         root_ = DefaultRootWindow(dpy_);
         GLint att[] = { GLX_RGBA, GLX_DEPTH_SIZE, 24, GLX_DOUBLEBUFFER, None };
         vi_ = glXChooseVisual(dpy_, 0, att);
-        if(!vi_) 
+        if (!vi_)
             throw std::runtime_error("no appropriate visual found");
-        
+
         cmap_ = XCreateColormap(dpy_, root_, vi_->visual, AllocNone);
         swa_.colormap = cmap_;
         swa_.event_mask = ExposureMask | KeyPressMask | KeyReleaseMask | PointerMotionMask | ButtonPress | ButtonReleaseMask;
         win_ = XCreateWindow(dpy_, root_, 0, 0, 300, 300, 0, vi_->depth, InputOutput, vi_->visual, CWColormap | CWEventMask, &swa_);
         XMapWindow(dpy_, win_);
-        
+
         glc_ = glXCreateContext(dpy_, vi_, NULL, GL_TRUE);
         make_current(nullptr);
 
@@ -331,7 +336,7 @@ public:
     {
         glXMakeCurrent(dpy_, win_, glc_);
     }
-    
+
     void free()
     {
         glXMakeCurrent(dpy_, None, NULL);
@@ -342,12 +347,12 @@ public:
     {
         XStoreName(dpy_, win_, title.c_str());
     }
-        
+
     void window_size(int width, int height)
     {
         XResizeWindow(dpy_, win_, width, height);
     }
-        
+
     void window_redraw() {}
 
     void window_quit(int exit_code) {}
@@ -363,81 +368,81 @@ static void process_event(XEvent& event)
         shogl()->kill();
         break;
     case ButtonPress:
+    {
+        switch (event.xbutton.button)
         {
-            switch (event.xbutton.button)
-            {
-            case 1:
-                shogl()->mouse_down(event.xbutton.x, event.xbutton.y, shogl_window::mouse_button::left);
-                break;
-            case 2:
-                shogl()->mouse_down(event.xbutton.x, event.xbutton.y, shogl_window::mouse_button::middle);
-                break;
-            case 3:
-                shogl()->mouse_down(event.xbutton.x, event.xbutton.y, shogl_window::mouse_button::right);
-                break;
-            case 4:
-                shogl()->mouse_scroll(event.xbutton.x, event.xbutton.y, 1);
-                break;
-            case 5:
-                shogl()->mouse_scroll(event.xbutton.x, event.xbutton.y, -1);
-                break;
-            default:
-                break;
-            }
+        case 1:
+            shogl()->mouse_down(event.xbutton.x, event.xbutton.y, shogl_window::mouse_button::left);
+            break;
+        case 2:
+            shogl()->mouse_down(event.xbutton.x, event.xbutton.y, shogl_window::mouse_button::middle);
+            break;
+        case 3:
+            shogl()->mouse_down(event.xbutton.x, event.xbutton.y, shogl_window::mouse_button::right);
+            break;
+        case 4:
+            shogl()->mouse_scroll(event.xbutton.x, event.xbutton.y, 1);
+            break;
+        case 5:
+            shogl()->mouse_scroll(event.xbutton.x, event.xbutton.y, -1);
+            break;
+        default:
+            break;
         }
-        break;
+    }
+    break;
     case ButtonRelease:
+    {
+        switch (event.xbutton.button)
         {
-            switch (event.xbutton.button)
-            {
-            case 1:
-                shogl()->mouse_up(event.xbutton.x, event.xbutton.y, shogl_window::mouse_button::left);
-                break;
-            case 2:
-                shogl()->mouse_up(event.xbutton.x, event.xbutton.y, shogl_window::mouse_button::middle);
-                break;
-            case 3:
-                shogl()->mouse_up(event.xbutton.x, event.xbutton.y, shogl_window::mouse_button::right);
-                break;
-            case 4:
-                shogl()->mouse_scroll(event.xbutton.x, event.xbutton.y, 1);
-                break;
-            case 5:
-                shogl()->mouse_scroll(event.xbutton.x, event.xbutton.y, -1);
-                break;
-            default:
-                break;
-            }
+        case 1:
+            shogl()->mouse_up(event.xbutton.x, event.xbutton.y, shogl_window::mouse_button::left);
+            break;
+        case 2:
+            shogl()->mouse_up(event.xbutton.x, event.xbutton.y, shogl_window::mouse_button::middle);
+            break;
+        case 3:
+            shogl()->mouse_up(event.xbutton.x, event.xbutton.y, shogl_window::mouse_button::right);
+            break;
+        case 4:
+            shogl()->mouse_scroll(event.xbutton.x, event.xbutton.y, 1);
+            break;
+        case 5:
+            shogl()->mouse_scroll(event.xbutton.x, event.xbutton.y, -1);
+            break;
+        default:
+            break;
         }
-        break;
+    }
+    break;
     case MotionNotify:
+    {
+        switch (event.xbutton.button)
         {
-            switch (event.xbutton.button)
-            {
-            case 1:
-                shogl()->mouse_move(event.xbutton.x, event.xbutton.y);
-                break;
-            case 2:
-                shogl()->mouse_move(event.xbutton.x, event.xbutton.y);
-                break;
-            case 3:
-                shogl()->mouse_move(event.xbutton.x, event.xbutton.y);
-                break;
-            default:
-                break;
-            }
+        case 1:
+            shogl()->mouse_move(event.xbutton.x, event.xbutton.y);
+            break;
+        case 2:
+            shogl()->mouse_move(event.xbutton.x, event.xbutton.y);
+            break;
+        case 3:
+            shogl()->mouse_move(event.xbutton.x, event.xbutton.y);
+            break;
+        default:
+            break;
         }
-        break;
+    }
+    break;
     case KeyPress:
-        {
-            shogl()->key_down(event.xbutton.x, event.xbutton.y, event.xkey.keycode);
-        }
-        break;
+    {
+        shogl()->key_down(event.xbutton.x, event.xbutton.y, event.xkey.keycode);
+    }
+    break;
     case KeyRelease:
-        {
-            shogl()->key_up(event.xbutton.x, event.xbutton.y, event.xkey.keycode);
-        }
-        break;
+    {
+        shogl()->key_up(event.xbutton.x, event.xbutton.y, event.xkey.keycode);
+    }
+    break;
     default:
         break;
     }
@@ -460,9 +465,9 @@ static int run_x()
             }
 
             // Process event(s) if any...
-            if(XCheckWindowEvent(ctx->dpy_, ctx->win_, KeyPressMask | KeyReleaseMask | PointerMotionMask | ButtonPressMask | ButtonReleaseMask, &ctx->xev_))
+            if (XCheckWindowEvent(ctx->dpy_, ctx->win_, KeyPressMask | KeyReleaseMask | PointerMotionMask | ButtonPressMask | ButtonReleaseMask, &ctx->xev_))
                 process_event(ctx->xev_);
-            
+
             // Draw if time for frame...
             if (shogl()->frame_limiter())
             {
@@ -488,10 +493,10 @@ static int run_x()
 
             // Process event(s) if any...
             process_event(ctx->xev_);
-            
+
             shogl()->draw();
             glXSwapBuffers(ctx->dpy_, ctx->win_);
-            
+
             // Idling...
             shogl()->idle();
         }
@@ -570,7 +575,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     case WM_SIZE:
     {
         shogl()->resize(static_cast<int>(LOWORD(lParam)), static_cast<int>(HIWORD(lParam)));
-        shogl()->assign_window_size(static_cast<int>(HIWORD(lParam)), static_cast<int>(LOWORD(lParam)));
+        shogl()->assign_window_size(static_cast<int>(LOWORD(lParam)), static_cast<int>(HIWORD(lParam)));
         break;
     }
     case WM_MOUSEWHEEL:
@@ -698,7 +703,7 @@ public:
             throw std::runtime_error(get_last_error_as_string());
 
         hInst_ = hInstance;
-        
+
         HDC hDC = static_cast<HDC>(GetDC(hWnd_));
         if (!hDC)
             throw std::runtime_error("Unable to get handle device context.");
@@ -728,17 +733,17 @@ public:
 
         // Get a valid context for requested version...
         std::vector<std::vector<int>> gl_version = { { shogl_version_major, shogl_version_minor } };
-        
+
         // If GL version is not set, attempt all...
         if (!shogl_version_major)
-            gl_version = 
-            {
-                { 4, 6 }, { 4, 5 }, { 4, 4 }, { 4, 3 }, { 4, 2 }, { 4, 1 }, { 4, 0 },
-                { 3, 3 }, { 3, 2 }, { 3, 1 }, { 3, 0 },
-                { 2, 2 }, { 2, 1 }, { 2, 0 },
-                { 1, 5 }, { 1, 4 }, { 1, 3 }, { 1, 2 }, { 1, 1 }
-            };
-        
+            gl_version =
+        {
+            { 4, 6 }, { 4, 5 }, { 4, 4 }, { 4, 3 }, { 4, 2 }, { 4, 1 }, { 4, 0 },
+            { 3, 3 }, { 3, 2 }, { 3, 1 }, { 3, 0 },
+            { 2, 2 }, { 2, 1 }, { 2, 0 },
+            { 1, 5 }, { 1, 4 }, { 1, 3 }, { 1, 2 }, { 1, 1 }
+        };
+
         PFNWGLCREATECONTEXTATTRIBSARBPROC glwindow_context_extended_wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)wglGetProcAddress("wglCreateContextAttribsARB");
         if (glwindow_context_extended_wglCreateContextAttribsARB)
         {
@@ -785,7 +790,7 @@ public:
         GetWindowRect(hWnd_, &rect);
         SetWindowPos(hWnd_, HWND_TOP, rect.left, rect.top, width, height, NULL);
     }
-    void window_quit(int exit_code) 
+    void window_quit(int exit_code)
     {
         PostQuitMessage(exit_code);
     }
@@ -799,12 +804,12 @@ static int run_win(int nCmdShow)
 
         // Set the window title...
         ctx->window_title(shogl()->window_title());
-        
+
         // Resize the window to desired width height...
         ctx->window_size(shogl()->window_width(), shogl()->window_height());
 
         // Main loop...
-        MSG msg; 
+        MSG msg;
         ShowWindow(ctx->hWnd_, nCmdShow);
         UpdateWindow(ctx->hWnd_);
 
@@ -822,7 +827,7 @@ static int run_win(int nCmdShow)
                 }
                 if (shogl()->frame_limiter())
                     shogl()->redraw();
-                
+
                 shogl()->idle();
             }
         }
@@ -840,7 +845,7 @@ static int run_win(int nCmdShow)
         // Kill
         shogl()->kill();
         ctx->free();
-        
+
         return (int)msg.wParam;
     }
     catch (const std::exception& e) { MessageBox(NULL, ansi_to_wide(e.what()).c_str(), L"GLwindow", MB_ICONERROR); }

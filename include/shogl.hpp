@@ -10,6 +10,7 @@
 
 // Forward declarations...
 void shogl_init_impl();
+int shogl_loop_impl();
 class shogl_window;
 extern shogl_window* shogl();
 
@@ -84,6 +85,11 @@ namespace { static std::unique_ptr<shogl_window> instance_; } \
 shogl_window* shogl() { if (!instance_) { instance_ = std::make_unique<shogl_window>(); } return instance_.get(); } \
 void shogl_init_impl()
 
+// Window no class (manual loop)...
+#define SHOGL_LOOP() SHOGL_LOOP_IMPL \
+namespace { static std::unique_ptr<shogl_window> instance_; } \
+shogl_window* shogl() { if (!instance_) { instance_ = std::make_unique<shogl_window>(); } return instance_.get(); } \
+int shogl_loop_impl()
 
 // GL versions...
 #ifdef SHOGL_OPENGL_10 
@@ -165,6 +171,7 @@ public:
         virtual void window_size(int width, int height) = 0;
         virtual void window_redraw() = 0;
         virtual void window_quit(int exit_code) = 0;
+        virtual int window_show() = 0;
     };
 
     typedef std::function<void()> idle_fn;
@@ -199,7 +206,8 @@ public:
 
     shogl_window(const std::string& title, int width, int height)
         : window_title_(title), window_width_(width), window_height_(height)
-    {}
+    {
+    }
 
     // Events...
 
@@ -289,6 +297,13 @@ public:
             context_->window_quit(exit_code);
     }
     bool window_quit() const { return quit_ >= 0; }
+
+    int window_show()
+    {
+        if (context_)
+            return context_->window_show();
+        return 1;
+    }
 };
 
 
@@ -586,7 +601,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     }
     case WM_MOUSEMOVE:
     {
-        shogl()->mouse_move(LOWORD(lParam), HIWORD(lParam));
+        shogl()->mouse_move(LOWORD(lParam), shogl()->window_height() - HIWORD(lParam));
         break;
     }
     case WM_LBUTTONDOWN:
@@ -677,8 +692,10 @@ public:
     HGLRC hGLrc_;
     HINSTANCE hInst_;
     WNDCLASSEX wcex_;
+    int nCmdShow_;
 
-    win_context(HINSTANCE hInstance)
+    win_context(HINSTANCE hInstance, int nCmdShow)
+        :   nCmdShow_(nCmdShow)
     {
         CoInitialize(nullptr);
 
@@ -794,73 +811,77 @@ public:
     {
         PostQuitMessage(exit_code);
     }
-};
 
-static int run_win(int nCmdShow)
-{
-    try
+    int window_show()
     {
-        auto ctx = dynamic_cast<win_context*>(shogl()->window_context());
-
-        // Set the window title...
-        ctx->window_title(shogl()->window_title());
-
-        // Resize the window to desired width height...
-        ctx->window_size(shogl()->window_width(), shogl()->window_height());
-
-        // Main loop...
-        MSG msg;
-        ShowWindow(ctx->hWnd_, nCmdShow);
-        UpdateWindow(ctx->hWnd_);
-
-        if (shogl()->window_fps())
+        try
         {
-            while (!shogl()->window_quit())
-            {
-                if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-                {
-                    if (msg.message == WM_QUIT)
-                        shogl()->window_quit();
+            // Set the window title...
+            window_title(shogl()->window_title());
 
+            // Resize the window to desired width height...
+            window_size(shogl()->window_width(), shogl()->window_height());
+
+            // Main loop...
+            MSG msg;
+            ShowWindow(hWnd_, nCmdShow_);
+            UpdateWindow(hWnd_);
+
+            if (shogl()->window_fps())
+            {
+                while (!shogl()->window_quit())
+                {
+                    if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+                    {
+                        if (msg.message == WM_QUIT)
+                            shogl()->window_quit();
+
+                        TranslateMessage(&msg);
+                        DispatchMessage(&msg);
+                    }
+                    if (shogl()->frame_limiter())
+                        shogl()->redraw();
+
+                    shogl()->idle();
+                }
+            }
+            else
+            {
+                while (GetMessage(&msg, NULL, 0, 0))\
+                {
+                    shogl()->idle();
+                    shogl()->redraw();
                     TranslateMessage(&msg);
                     DispatchMessage(&msg);
                 }
-                if (shogl()->frame_limiter())
-                    shogl()->redraw();
-
-                shogl()->idle();
             }
-        }
-        else
-        {
-            while (GetMessage(&msg, NULL, 0, 0))\
-            {
-                shogl()->idle();
-                shogl()->redraw();
-                TranslateMessage(&msg);
-                DispatchMessage(&msg);
-            }
-        }
 
-        // Kill
-        shogl()->kill();
-        ctx->free();
+            // Kill
+            shogl()->kill();
+            free();
 
-        return (int)msg.wParam;
+            return (int)msg.wParam;
+        }
+        catch (const std::exception& e) { MessageBox(NULL, ansi_to_wide(e.what()).c_str(), L"GLwindow", MB_ICONERROR); }
+        catch (...) { MessageBox(NULL, L"Unknown error", L"GLwindow", MB_ICONERROR); }
+        return 0;
     }
-    catch (const std::exception& e) { MessageBox(NULL, ansi_to_wide(e.what()).c_str(), L"GLwindow", MB_ICONERROR); }
-    catch (...) { MessageBox(NULL, L"Unknown error", L"GLwindow", MB_ICONERROR); }
-    return 0;
-}
+};
 
 #define SHOGL_IMPL int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) \
 { \
-    std::shared_ptr<win_context> ctx = std::make_shared<win_context>(hInstance); \
+    std::shared_ptr<win_context> ctx = std::make_shared<win_context>(hInstance, nCmdShow); \
     shogl_init_impl(); \
     shogl()->window_context(ctx); \
-    return run_win(nCmdShow); \
+    return shogl()->window_show(); \
 }   
 
+#define SHOGL_LOOP_IMPL int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) \
+{ \
+    std::shared_ptr<win_context> ctx = std::make_shared<win_context>(hInstance, nCmdShow); \
+    shogl()->window_context(ctx); \
+    return shogl_loop_impl(); \
+}
 
 #endif // SHOGL_WIN
 

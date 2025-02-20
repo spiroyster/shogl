@@ -23,13 +23,17 @@ Designed to be quick and easy to use and still versatile only requiring C++14 an
 
 Simply include single header file _shogl.hpp_. shogl only requires C++14 std and uses _wglext.h_ (windows) and _glx.hpp_ (X11) which should be in the same folder as _shogl.hpp_ and are provided.
 
-shogl works by instatiating a platform/version dependant context _shogl_window::context_ and then providing an interface _shogl_window_ that can be used in two different ways. Either an OO paradim can be used by optionally deriving from _shogl_window_ class a custom class and overriding the required methods, or a more functional paradim which setting a callback for the required method.  
+shogl works by instatiating a platform/version dependant context _shogl_window::context_ and then providing an interface _shogl_window_ that can be used in different ways. 
 
-To initialise shogl, using a custom class, define the class and then use __SHOGL_CLASS(...)__ macro...
+Either an OO paradim can be used by optionally deriving from _shogl_window_ class a custom class and overriding the required methods, or a more functional paradim which setting a callback for the required method and (optionally) manually starting the run loop.  
+
+To initialise shogl, using a custom class in a more OO paradigm way. Define the class deriving from _shogl_window_ and then use __SHOGL_CLASS(...)__ macro...
 
     class myClass : public shogl_window
     {
         ...
+
+        // members have shogl longevity...
     };
 
     SHOGL_CLASS(myClass)
@@ -37,14 +41,36 @@ To initialise shogl, using a custom class, define the class and then use __SHOGL
         ...
     }
 
-Or to use the default _shogl_window_ class, use the __SHOGL(...)__ macro. This implies callbacks can only be used...
+The state is contained shoudl be contained within the custom class and longevity is coupled with that of the class. The relevant methods which respond to window events can be overriden and optional initialisation can be done in the macro body or constructor. The OpenGL context is valid at this point so extended gl functions (aquired via _***getProcAddress_) are valid to be used, however it is not attached to the shogl_window so there is no direct access to the context (_shogl_window::window_context()_).
+
+An alternative way to use the window is more procedural by not deriving _shogl_window_, instead providing callbacks which are called instead of overriding methods when window events happen.
+Using the default _shogl_window_ class is done using the __SHOGL(...)__ macro. This implies callbacks can only be used and must be setup in the macro body...
+
+    // vars must be global/static to have shogl longevity...
+    static int someVar;
 
     SHOGL()
     {
         ...
+
+        // must define callbacks to hook into window events...
     }
 
 Optional initialisation code can go in the body of either of the macros (or use constructor of dervied class), in either case the gl context can be assumed constructed at this point so extended gl functions (aquired via _***getProcAddress_) are valid to be used.
+State must be global and static since only a macro body can be used initialisation, and anything in here will be destructed before the window is shown and begins it main loop.
+
+To retain state in the intialisation loop, the macro body needs to become the program main body and the main loop manually started at the end of the block. Use the loop macro __SHOGL_LOOP()__ to do this and manually call _return shogl().window_show()__ at the end of the macro block. 
+
+    SHOGL_LOOP()
+    {
+        ...
+
+        // vars have shogl longevity...
+
+        return shogl().window_show();
+    }
+
+All objects constructed within the body will have window longevity and thus not destruct until shogl terminates/finishes. Using the loop macro, the context is attached to the window so calling _shogl_window::window_context()_ is valid.
 
 > It is possible to use a callback with a derived method by calling the base (which will invoke the callback if present) and then invoking the method body, however this is not recommended, favouring centralising body/logic of desired method.
 

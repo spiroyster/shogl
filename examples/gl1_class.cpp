@@ -24,10 +24,7 @@ public:
         glColor3f(0, 0, 1.0f);
         glVertex3f(0.5f, -0.5f, -1.0f);
         glEnd();
-    }
 
-    void idle()
-    {
         angle_ += 0.1f;
     }
 
@@ -38,7 +35,11 @@ public:
 
     void key_down(int x, int y, unsigned int key)
     {
-        shogl()->window_quit(0);
+        if (key == VK_ESCAPE)
+            shogl()->window_quit(0);
+        else
+            shogl()->window_event_behaviour(shogl()->window_event_behaviour() == shogl_window::peekEvent ? 
+                shogl_window::waitForEvent : shogl_window::peekEvent);
     }
 
 
@@ -48,4 +49,6 @@ SHOGL_CLASS(myWindow)
 {
     shogl()->window_title("Hello triangle (class) GL1");
     shogl()->window_fps(60);
+
+    return shogl()->window_show();
 }

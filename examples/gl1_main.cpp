@@ -1,14 +1,14 @@
 #define SHOGL_OPENGL_10             // Force GL1.0 context.
 #include "../include/shogl.hpp"     // Include shogl...
 
-float angle = 0.0f;
-
-SHOGL_MAIN()
+SHOGL()
 {
-    shogl()->window_title("Hello triangle (callback) GL1");
-    shogl()->window_fps(60);
+	shogl()->window_title("Shogl GL1 main");
+	shogl()->window_fps(60);
 
-    shogl()->draw([=]() 
+    float angle = 0.0f;
+
+    shogl()->draw([&angle]()
         {
             glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -25,21 +25,22 @@ SHOGL_MAIN()
             glColor3f(0, 0, 1.0f);
             glVertex3f(0.5f, -0.5f, -1.0f);
             glEnd();
+
+            angle += 0.1f;
         });
 
-    shogl()->idle([=]()
+    shogl()->key_down([](int x, int y, unsigned int key) 
         {
-            angle += 0.1f;
+            if (key == VK_ESCAPE)
+                shogl()->window_quit(0);
+            else
+                shogl()->window_event_behaviour(shogl()->window_event_behaviour() == shogl_window::peekEvent ?
+                    shogl_window::waitForEvent : shogl_window::peekEvent);
         });
 
     shogl()->resize([](int width, int height) 
         {
             glViewport(0, 0, width, height);
-        });
-
-    shogl()->key_down([](int x, int y, unsigned int key)
-        {
-            shogl()->window_quit(0);
         });
 
     return shogl()->window_show();

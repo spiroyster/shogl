@@ -1,8 +1,5 @@
 
 #include "../include/shogl.hpp"
-#include "helpers.hpp"
-
-#include <math.h>
 
 class myWindow : public shogl_window
 {
@@ -31,13 +28,71 @@ class myWindow : public shogl_window
     GLFN(GLDELETEVERTEXARRAYS, glDeleteVertexArrays)
     GLFN(GLDELETEBUFFERS, glDeleteBuffers)
 
+    GLuint glsl_compile(GLuint type, const std::string& source)
+    {
+        GLFN(GLCREATESHADER, glCreateShader)
+            GLFN(GLSHADERSOURCE, glShaderSource)
+            GLFN(GLCOMPILESHADER, glCompileShader)
+            GLFN(GLLINKPROGRAM, glLinkProgram)
+            GLFN(GLGETSHADERIV, glGetShaderiv)
+            GLFN(GLGETSHADERINFOLOG, glGetShaderInfoLog)
+
+            GLuint shaderID = glCreateShader(type);
+        const char* src = source.c_str();
+
+        glShaderSource(shaderID, 1, &src, NULL);
+        glCompileShader(shaderID);
+
+        GLint result = GL_FALSE;
+        glGetShaderiv(shaderID, GL_COMPILE_STATUS, &result);
+        if (result == GL_FALSE)
+        {
+            int infoLogLength;
+            glGetShaderiv(shaderID, GL_INFO_LOG_LENGTH, &infoLogLength);
+            std::vector<GLchar> error(infoLogLength);
+            glGetShaderInfoLog(shaderID, infoLogLength, &infoLogLength, &error[0]);
+            throw std::runtime_error(std::string(&error[0], error.size()));
+        }
+        return shaderID;
+    }
+
+    GLuint glsl_link(const std::vector<GLuint>& shaders)
+    {
+        GLFN(GLCREATEPROGRAM, glCreateProgram)
+            GLFN(GLATTACHSHADER, glAttachShader)
+            GLFN(GLDETACHSHADER, glDetachShader)
+            GLFN(GLLINKPROGRAM, glLinkProgram)
+            GLFN(GLGETPROGRAMIV, glGetProgramiv)
+            GLFN(GLGETPROGRAMINFOLOG, glGetProgramInfoLog)
+
+            GLuint programID = glCreateProgram();
+        for (unsigned int s = 0; s < shaders.size(); ++s)
+            glAttachShader(programID, shaders[s]);
+
+        glLinkProgram(programID);
+        GLint result = GL_FALSE;
+        glGetProgramiv(programID, GL_LINK_STATUS, &result);
+        if (result == GL_FALSE)
+        {
+            int InfoLogLength;
+            glGetProgramiv(programID, GL_INFO_LOG_LENGTH, &InfoLogLength);
+            std::vector<GLchar> error(InfoLogLength);
+            glGetProgramInfoLog(programID, InfoLogLength, &InfoLogLength, &error[0]);
+            throw std::runtime_error(std::string(&error[0], error.size()));
+        }
+
+        for (unsigned int s = 0; s < shaders.size(); ++s)
+            glDetachShader(programID, shaders[s]);
+
+        return programID;
+    }
+
 public:
     myWindow()
     {
         // Create our geometry...
         std::vector<float> points = { -0.5f, -0.5f, 0.0f, 0.0f, 0.5f, 0.0f, 0.5f, -0.5f, 0.0f };
         std::vector<float> colours = { 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f };
-        
 
         glGenVertexArrays(1, &vao_);
         glBindVertexArray(vao_);
@@ -60,7 +115,7 @@ public:
         glDisableVertexAttribArray(0);
         glDisableVertexAttribArray(1);
 
-        GLuint vertexShader = shogl_helpers::glsl_compile(GL_VERTEX_SHADER, R"(
+        GLuint vertexShader = glsl_compile(GL_VERTEX_SHADER, R"(
             #version 410 core
             layout(location=0) in vec3 inPoint;
             layout(location=1) in vec3 inColour;
@@ -73,7 +128,7 @@ public:
             }
         )");
 
-        GLuint fragmentShader = shogl_helpers::glsl_compile(GL_FRAGMENT_SHADER, R"(
+        GLuint fragmentShader = glsl_compile(GL_FRAGMENT_SHADER, R"(
             #version 410 core
             in vec3 colour;
             out vec4 frag;
@@ -83,7 +138,7 @@ public:
             }
         )");
 
-        program_ = shogl_helpers::glsl_link({ vertexShader, fragmentShader });
+        program_ = glsl_link({ vertexShader, fragmentShader });
         rotationMatrixLocation_ = glGetUniformLocation(program_, "rotationMatrix");
 
         glUseProgram(NULL);
@@ -127,14 +182,19 @@ public:
 
     void key_down(int x, int y, unsigned int key)
     {
-        shogl()->window_quit(0);
-        printf("quitting...");
+        if (key == VK_ESCAPE)
+            shogl()->window_quit(0);
+        else
+            shogl()->window_event_behaviour(shogl()->window_event_behaviour() == shogl_window::peekEvent ?
+                shogl_window::waitForEvent : shogl_window::peekEvent);
     }
 };
 
 SHOGL_CLASS(myWindow)
 {
-    shogl()->window_title("Hello triangle GL4");
+    shogl()->window_title("Hello triangle (class) GL4");
+    shogl()->window_fps(60);
     shogl()->window_size(600, 600);
-    //shogl()->window_fps(60);
+
+    return shogl()->window_show();
 }

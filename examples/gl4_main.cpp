@@ -1,4 +1,5 @@
 #include "../include/shogl.hpp"
+#include <cmath>
 
 namespace
 {
@@ -188,7 +189,7 @@ SHOGL()
 
     shogl()->key_down([](int x, int y, unsigned int key)
         {
-            if (key == VK_ESCAPE)
+            if (key == 27)
                 shogl()->window_quit(0);
             else
                 shogl()->window_event_behaviour(shogl()->window_event_behaviour() == shogl_window::peekEvent ?

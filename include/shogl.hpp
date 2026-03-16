@@ -262,6 +262,7 @@ public:
             context_->window_size(width, height);
         window_width_ = width;
         window_height_ = height;
+        resize(window_width_, window_height_);
     }
     int window_height() const { return window_height_; }
     int window_width() const { return window_width_; }
@@ -389,8 +390,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     }
     case WM_SIZE:
     {
-        shogl()->resize(static_cast<int>(LOWORD(lParam)), static_cast<int>(HIWORD(lParam)));
-        //shogl()->assign_window_size(static_cast<int>(LOWORD(lParam)), static_cast<int>(HIWORD(lParam)));
+        shogl()->window_size(static_cast<int>(LOWORD(lParam)), static_cast<int>(HIWORD(lParam)));
         break;
     }
     case WM_MOUSEWHEEL:
@@ -624,7 +624,7 @@ public:
             window_title(shogl_window->window_title());
 
             // Resize the window to desired width height...
-            window_size(shogl_window->window_width(), shogl_window->window_height());
+            shogl_window->window_size(shogl_window->window_width(), shogl_window->window_height());
 
             // Main loop...
             MSG msg;
@@ -701,12 +701,13 @@ public:
 
 #ifdef SHOGL_X
 
-#include<stdio.h>
-#include<stdlib.h>
-#include<X11/X.h>
-#include<X11/Xlib.h>
-#include<GL/gl.h>
-#include<GL/glx.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <X11/X.h>
+#include <X11/Xlib.h>
+#include <GL/gl.h>
+#include <GL/glx.h>
+#include <iostream>
 
 // GL Function macros...
 #define GLFN_PROTOTYPE(prototype) PFN ## prototype ## PROC
@@ -721,70 +722,6 @@ public:
 
 
 #ifdef SHOGL_X
-
-class x_context : public shogl_window::context
-{
-public:
-
-    GLXContext              glc_;
-    Display* dpy_;
-    Window                  root_;
-    XVisualInfo* vi_;
-    Colormap                cmap_;
-    XSetWindowAttributes    swa_;
-    Window                  win_;
-    XWindowAttributes       gwa_;
-    XEvent                  xev_;
-
-    x_context()
-    {
-        dpy_ = XOpenDisplay(NULL);
-        if (!dpy_)
-            throw std::runtime_error("cannot connect to X server");
-
-        root_ = DefaultRootWindow(dpy_);
-        GLint att[] = { GLX_RGBA, GLX_DEPTH_SIZE, 24, GLX_DOUBLEBUFFER, None };
-        vi_ = glXChooseVisual(dpy_, 0, att);
-        if (!vi_)
-            throw std::runtime_error("no appropriate visual found");
-
-        cmap_ = XCreateColormap(dpy_, root_, vi_->visual, AllocNone);
-        swa_.colormap = cmap_;
-        swa_.event_mask = ExposureMask | KeyPressMask | KeyReleaseMask | PointerMotionMask | ButtonPress | ButtonReleaseMask;
-        win_ = XCreateWindow(dpy_, root_, 0, 0, 300, 300, 0, vi_->depth, InputOutput, vi_->visual, CWColormap | CWEventMask, &swa_);
-        XMapWindow(dpy_, win_);
-
-        glc_ = glXCreateContext(dpy_, vi_, NULL, GL_TRUE);
-        make_current(nullptr);
-
-        printf("OpenGL %s\n", glGetString(GL_VERSION));
-    }
-
-    void make_current(void*)
-    {
-        glXMakeCurrent(dpy_, win_, glc_);
-    }
-
-    void free()
-    {
-        glXMakeCurrent(dpy_, None, NULL);
-        glXDestroyContext(dpy_, glc_);
-    }
-
-    void window_title(const std::string& title)
-    {
-        XStoreName(dpy_, win_, title.c_str());
-    }
-
-    void window_size(int width, int height)
-    {
-        XResizeWindow(dpy_, win_, width, height);
-    }
-
-    void window_redraw() {}
-
-    void window_quit(int exit_code) {}
-};
 
 static void process_event(XEvent& event)
 {
@@ -876,80 +813,158 @@ static void process_event(XEvent& event)
     }
 }
 
-static int run_x()
+class x_context : public shogl_window::context
 {
-    auto ctx = dynamic_cast<x_context*>(shogl()->window_context());
-    XStoreName(ctx->dpy_, ctx->win_, shogl()->window_title().c_str());
-    if (shogl()->window_fps())
+public:
+
+    GLXContext              glc_;
+    Display* dpy_;
+    Window                  root_;
+    XVisualInfo* vi_;
+    Colormap                cmap_;
+    XSetWindowAttributes    swa_;
+    Window                  win_;
+    XWindowAttributes       gwa_;
+    XEvent                  xev_;
+
+    x_context(int argc, char** argv)
     {
-        while (!shogl()->window_quit())
-        {
-            // Check resize...
-            XGetWindowAttributes(ctx->dpy_, ctx->win_, &ctx->gwa_);
-            if (shogl()->window_width() != ctx->gwa_.width || shogl()->window_height() != ctx->gwa_.height)
-            {
-                shogl()->resize(ctx->gwa_.width, ctx->gwa_.height);
-                shogl()->assign_window_size(ctx->gwa_.width, ctx->gwa_.height);
-            }
+        dpy_ = XOpenDisplay(NULL);
+        if (!dpy_)
+            throw std::runtime_error("cannot connect to X server");
 
-            // Process event(s) if any...
-            if (XCheckWindowEvent(ctx->dpy_, ctx->win_, KeyPressMask | KeyReleaseMask | PointerMotionMask | ButtonPressMask | ButtonReleaseMask, &ctx->xev_))
-                process_event(ctx->xev_);
+        root_ = DefaultRootWindow(dpy_);
+        GLint att[] = { GLX_RGBA, GLX_DEPTH_SIZE, 24, GLX_DOUBLEBUFFER, None };
+        vi_ = glXChooseVisual(dpy_, 0, att);
+        if (!vi_)
+            throw std::runtime_error("no appropriate visual found");
 
-            // Draw if time for frame...
-            if (shogl()->frame_limiter())
-            {
-                shogl()->draw();
-                glXSwapBuffers(ctx->dpy_, ctx->win_);
-            }
+        cmap_ = XCreateColormap(dpy_, root_, vi_->visual, AllocNone);
+        swa_.colormap = cmap_;
+        swa_.event_mask = ExposureMask | KeyPressMask | KeyReleaseMask | PointerMotionMask | ButtonPress | ButtonReleaseMask;
+        win_ = XCreateWindow(dpy_, root_, 0, 0, 300, 300, 0, vi_->depth, InputOutput, vi_->visual, CWColormap | CWEventMask, &swa_);
+        XMapWindow(dpy_, win_);
 
-            // Idling...
-            shogl()->idle();
-        }
+        glc_ = glXCreateContext(dpy_, vi_, NULL, GL_TRUE);
+        make_current(nullptr);
+
+        printf("OpenGL %s\n", glGetString(GL_VERSION));
     }
-    else
+
+    void make_current(void*)
     {
-        while (!shogl()->window_quit())
+        glXMakeCurrent(dpy_, win_, glc_);
+    }
+
+    void* DC() { return nullptr; }
+    void* GLC() { return nullptr; }
+
+    void free()
+    {
+        glXMakeCurrent(dpy_, None, NULL);
+        glXDestroyContext(dpy_, glc_);
+    }
+
+    void window_title(const std::string& title)
+    {
+        XStoreName(dpy_, win_, title.c_str());
+    }
+
+    void window_redraw() 
+    {
+        shogl()->draw();
+        glXSwapBuffers(dpy_, win_);
+    }
+
+    void window_size(int width, int height)
+    {
+        XResizeWindow(dpy_, win_, width, height);
+    }
+
+    void window_quit(int exit_code) {}
+
+    int window_show()
+    {
+        try
         {
-            XNextEvent(ctx->dpy_, &ctx->xev_);
-            XGetWindowAttributes(ctx->dpy_, ctx->win_, &ctx->gwa_);
-            if (shogl()->window_width() != ctx->gwa_.width || shogl()->window_height() != ctx->gwa_.height)
+            auto shogl_window = shogl();
+            
+            // Set the window title...
+            XStoreName(dpy_, win_, shogl_window->window_title().c_str());
+
+            // Resize the window to desired width height...
+            shogl_window->window_size(shogl_window->window_width(), shogl_window->window_height());
+
+            // Keep looping until exit code...
+            while (!shogl_window->window_quit())
             {
-                shogl()->resize(ctx->gwa_.width, ctx->gwa_.height);
-                shogl()->assign_window_size(ctx->gwa_.width, ctx->gwa_.height);
+                shogl_window::event_behaviour current_behaviour = shogl()->window_event_behaviour();
+                if (current_behaviour == shogl_window::event_behaviour::peekEvent)
+                {
+                    // Check the event mode for the window, this defines the loop behaviour...
+                    while (!shogl_window->window_quit() && current_behaviour == shogl_window->window_event_behaviour())
+                    {
+                        // Check resize...
+                        XGetWindowAttributes(dpy_, win_, &gwa_);
+                        if (shogl_window->window_width() != gwa_.width || shogl_window->window_height() != gwa_.height)
+                            shogl_window->window_size(gwa_.width, gwa_.height);
+
+                        // Process event(s) if any...
+                        if (XCheckWindowEvent(dpy_, win_, KeyPressMask | KeyReleaseMask | PointerMotionMask | ButtonPressMask | ButtonReleaseMask, &xev_))
+                            process_event(xev_);
+
+                        // Draw if time for frame...
+                        if (shogl_window->frame_limiter())
+                            shogl_window->redraw();
+
+                        shogl_window->idle();
+                    }
+                }
+                else
+                {
+                    while (!shogl_window->window_quit() && current_behaviour == shogl_window->window_event_behaviour())
+                    {
+                        XNextEvent(dpy_, &xev_);
+                        XGetWindowAttributes(dpy_, win_, &gwa_);
+                        if (shogl_window->window_width() != gwa_.width || shogl_window->window_height() != gwa_.height)
+                            shogl_window->window_size(gwa_.width, gwa_.height);
+
+                        // Process event(s) if any...
+                        process_event(xev_);
+
+                        shogl_window->redraw();
+
+                        // Idling...
+                        shogl_window->idle();
+                    }
+
+                }
+
             }
 
-            // Process event(s) if any...
-            process_event(ctx->xev_);
+            shogl_window->kill();
+            free();
 
-            shogl()->draw();
-            glXSwapBuffers(ctx->dpy_, ctx->win_);
+            XDestroyWindow(dpy_, win_);
+            XCloseDisplay(dpy_);
+            return 0;
 
-            // Idling...
-            shogl()->idle();
         }
+        catch (const std::exception& e) { std::cerr << e.what(); }
+        catch (...) { std::cerr << "Unknown error"; }
+        return 1;
     }
-    shogl()->kill();
-    ctx->free();
-    XDestroyWindow(ctx->dpy_, ctx->win_);
-    XCloseDisplay(ctx->dpy_);
-    return 0;
-}
+};
 
 // For this to work, we first need to create the context since GL functions maybe members of shogl_window so valid 
 // context will need to exist before resolving them via shogl_window instantiation...
-#define SHOGL_IMPL int main(int argc, char **argv) \
+#define SHOGL_MAIN_IMPL int main(int argc, char **argv) \
 { \
-    std::shared_ptr<x_context> ctx = std::make_shared<x_context>(); \
-    shogl_init_impl(); \
+    std::shared_ptr<x_context> ctx = std::make_shared<x_context>(argc, argv); \
     shogl()->window_context(ctx); \
-    return run_x(); \
-} 
+    return shogl_main_impl(); \
+}
 
 #endif // SHOGL_X
-
-
-#ifdef SHOGL_WIN
-#endif // SHOGL_WIN
 
 #endif // SHOGL_HPP

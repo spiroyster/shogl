@@ -605,9 +605,9 @@ public:
     }
     void window_size(int width, int height)
     {
-        RECT rect;
-        GetWindowRect(hWnd_, &rect);
-        SetWindowPos(hWnd_, HWND_TOP, rect.left, rect.top, width, height, NULL);
+        //RECT rect;
+        //GetWindowRect(hWnd_, &rect);
+        //SetWindowPos(hWnd_, HWND_TOP, rect.left, rect.top, width, height, NULL);
     }
     void window_quit(int exit_code)
     {
@@ -624,7 +624,7 @@ public:
             window_title(shogl_window->window_title());
 
             // Resize the window to desired width height...
-            shogl_window->window_size(shogl_window->window_width(), shogl_window->window_height());
+            //window_size(shogl_window->window_width(), shogl_window->window_height());
 
             // Main loop...
             MSG msg;

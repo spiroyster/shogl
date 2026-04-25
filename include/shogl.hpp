@@ -2,7 +2,7 @@
 
 MIT License
 
-Copyright(c) 2024 spiroyster
+Copyright(c) 2024 Cordell Barron
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files(the "Software"), to deal
@@ -270,7 +270,7 @@ public:
     int window_fps() const { return fps_; }
     void window_fps(int fps) { fps_ = fps; }
 
-    void window_context(std::shared_ptr<context> ctxt) { context_ = ctxt; }
+    void window_context(std::shared_ptr<context>& ctxt) { context_ = ctxt; }
     context* window_context() { return context_.get(); }
 
     void redraw() { if (context_) { context_->window_redraw(); } }
@@ -613,7 +613,6 @@ public:
     {
         PostQuitMessage(exit_code);
     }
-
     int window_show()
     {
         try
@@ -688,18 +687,13 @@ public:
 }
 
 
-#endif
-#endif
+#endif // SHOGL_WIN
+#endif // defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
 
 
 #ifndef SHOGL_X
 #if defined(__linux__) || defined(__unix__)
 #define SHOGL_X
-#endif
-#endif
-
-
-#ifdef SHOGL_X
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -717,11 +711,6 @@ public:
 
 //#define SHOGL_QUIT(value) PostQuitMessage(value);
 #define SHOGL_CONTEXT dynamic_cast<x_context*>(shogl()->window_context());
-
-#endif // SHOGL_X
-
-
-#ifdef SHOGL_X
 
 static void process_event(XEvent& event)
 {
@@ -966,5 +955,27 @@ public:
 }
 
 #endif // SHOGL_X
+#endif // defined(__linux__) || defined(__unix__)
+
+
+// #ifndef SHOGL_OSX
+// //#if defined(__APPLE__) || defined(__OSX__)
+// #define SHOGL_OSX
+
+// #if defined(SHOGL_OPENGL_30) || defined(SHOGL_OPENGL_31) || defined(SHOGL_OPENGL_32) || defined(SHOGL_OPENGL_33)
+// #define GL_SILENCE_DEPRECATION
+// #include <OpenGL/gl3.h>
+// #endif // defined(SHOGL_OPENGL_30) || defined(SHOGL_OPENGL_31) || defined(SHOGL_OPENGL_32) || defined(SHOGL_OPENGL_33)
+
+// // GL Function macros...
+// #define GLFN_DECLARE(prototype, name) ;
+// #define GLFN_DEFINE(prototype, name) ;
+// #define GLFN(prototype, name) ;
+
+// #define SHOGL_QUIT(exitCode) ;
+// #define SHOGL_CONTEXT dynamic_cast<win_context*>(shogl()->window_context());
+
+// #endif // SHOGL_OSX
+//#endif // defined(__apple__) || defined(__osx__)
 
 #endif // SHOGL_HPP
